@@ -215,7 +215,7 @@ function TicketCard({
       return 'bg-zinc-800/50 border-red-500 bg-red-500/10'
     }
     if (columnType === 'review') {
-      return 'bg-zinc-800/50 border-green-500 bg-green-500/10'
+      return 'bg-zinc-800/50 border-zinc-700'
     }
     if (columnType === 'complete') {
       return 'bg-zinc-800/50 border-green-700 bg-green-700/5'
@@ -261,7 +261,7 @@ function TicketCard({
       {columnType === 'new' && (
         <div className="mt-2">
           <button
-            className="w-full px-3 py-2 text-xs text-zinc-400 bg-transparent border border-zinc-600 rounded hover:bg-zinc-800 transition-colors"
+            className="w-full px-3 py-2 text-xs text-zinc-400 bg-zinc-700 border border-zinc-600 rounded hover:bg-zinc-600 transition-colors"
             onClick={() => onScope(ticket.number)}
           >
             Scope
