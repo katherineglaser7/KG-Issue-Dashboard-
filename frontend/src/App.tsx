@@ -759,9 +759,10 @@ function App() {
     }
   }
 
-  const todoTickets = tickets.filter(t => t.status === 'new' || t.status === 'todo' || t.status === 'scoped')
-  const inProgressTickets = tickets.filter(t => t.status === 'in_progress')
-  const doneTickets = tickets.filter(t => t.status === 'review' || t.status === 'complete' || t.status === 'done')
+  const newTickets = tickets.filter(t => t.status === 'new' || t.status === 'todo')
+  const scopedTickets = tickets.filter(t => t.status === 'scoped' || t.status === 'in_progress')
+  const reviewTickets = tickets.filter(t => t.status === 'review')
+  const completeTickets = tickets.filter(t => t.status === 'complete' || t.status === 'done')
 
   if (loading) {
     return (
@@ -820,9 +821,9 @@ function App() {
 
         <div className="flex gap-6 overflow-x-auto pb-4">
           <Column 
-            title="Todo" 
-            count={todoTickets.length} 
-            tickets={todoTickets}
+            title="New" 
+            count={newTickets.length} 
+            tickets={newTickets}
             scopeData={scopeData}
             onScope={handleScope}
             columnType="new"
@@ -832,9 +833,9 @@ function App() {
             onComplete={handleComplete}
           />
           <Column 
-            title="In Progress" 
-            count={inProgressTickets.length} 
-            tickets={inProgressTickets}
+            title="Scoped" 
+            count={scopedTickets.length} 
+            tickets={scopedTickets}
             scopeData={scopeData}
             onScope={handleScope}
             columnType="scoped"
@@ -844,9 +845,21 @@ function App() {
             onComplete={handleComplete}
           />
           <Column 
-            title="Done" 
-            count={doneTickets.length} 
-            tickets={doneTickets}
+            title="Review" 
+            count={reviewTickets.length} 
+            tickets={reviewTickets}
+            scopeData={scopeData}
+            onScope={handleScope}
+            columnType="review"
+            jobData={jobData}
+            onExecute={handleExecute}
+            onCancel={handleCancel}
+            onComplete={handleComplete}
+          />
+          <Column 
+            title="Complete" 
+            count={completeTickets.length} 
+            tickets={completeTickets}
             scopeData={scopeData}
             onScope={handleScope}
             columnType="complete"
