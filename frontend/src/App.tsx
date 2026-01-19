@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronDown, ChevronUp, Circle, HelpCircle, ExternalLink, X, Loader2, RefreshCw } from 'lucide-react'
+import { ChevronDown, HelpCircle, ExternalLink, X, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -154,7 +154,7 @@ function ProgressBar({ score, maxScore = 25 }: { score: number; maxScore?: numbe
   )
 }
 
-function AnalysisDisplay({ analysis, compact = false }: { analysis: TicketAnalysis; compact?: boolean }) {
+function AnalysisDisplay({ analysis }: { analysis: TicketAnalysis }) {
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-400'
     if (score >= 60) return 'text-yellow-400'
@@ -163,56 +163,31 @@ function AnalysisDisplay({ analysis, compact = false }: { analysis: TicketAnalys
 
   const dimensionLabels: Record<string, string> = {
     requirement_clarity: 'Requirement Clarity',
-    blast_radius: 'Blast Radius',
+    blast_radius: 'Code Complexity',
     system_sensitivity: 'System Sensitivity',
-    testability: 'Testability',
+    testability: 'Test Coverage',
   }
 
   return (
     <div className="space-y-3">
-      {!compact && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-400">Confidence Score</span>
-          <span className={`text-xl font-bold ${getScoreColor(analysis.confidence_score.total)}`}>
-            {analysis.confidence_score.total}/100
-          </span>
-        </div>
-      )}
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-zinc-400">Confidence Score</span>
+        <span className={`text-xl font-bold ${getScoreColor(analysis.confidence_score.total)}`}>
+          {analysis.confidence_score.total}/100
+        </span>
+      </div>
 
-      {!compact && (
-        <div className="space-y-3">
-          {Object.entries(analysis.confidence_score.breakdown).map(([key, value]) => (
-            <div key={key}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-zinc-400">{dimensionLabels[key] || key}</span>
-                <span className="text-xs text-zinc-400">{value.score}/25</span>
-              </div>
-              <ProgressBar score={value.score} />
+      <div className="space-y-2">
+        {Object.entries(analysis.confidence_score.breakdown).map(([key, value]) => (
+          <div key={key}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-zinc-400">{dimensionLabels[key] || key}</span>
+              <span className="text-xs text-zinc-400">{value.score}/25</span>
             </div>
-          ))}
-        </div>
-      )}
-
-      {compact && (
-        <>
-          <div>
-            <span className="text-xs text-zinc-400 block mb-1">Root Issue</span>
-            <p className="text-xs text-zinc-300">{analysis.root_issue}</p>
+            <ProgressBar score={value.score} />
           </div>
-
-          <div>
-            <span className="text-xs text-zinc-400 block mb-1">Action Plan</span>
-            <ul className="space-y-1">
-              {analysis.action_plan.map((step, idx) => (
-                <li key={idx} className="text-xs text-zinc-300 flex items-start gap-2">
-                  <span className="text-zinc-500">{idx + 1}.</span>
-                  {step}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </>
-      )}
+        ))}
+      </div>
     </div>
   )
 }
@@ -237,7 +212,6 @@ function TicketCard({
   onComplete: (ticketNumber: number) => void
 }){
   const scope = scopeData[ticket.number]
-  const isExpanded = scope?.expanded || false
   const isLoading = scope?.loading || false
   const analysis = scope?.analysis || ticket.analysis || null
   const job = jobData[ticket.number]?.job
@@ -265,8 +239,6 @@ function TicketCard({
   }
 
   const getBadge = () => {
-    const hasDevinTriagedLabel = ticket.labels.some(l => l.toLowerCase() === 'devin:triaged')
-    
     if (ticket.status === 'in_progress' || job?.status === 'running') {
       return <span className="text-xs text-yellow-400 bg-yellow-900/50 px-1.5 py-0.5 rounded">IN PROGRESS</span>
     }
@@ -274,9 +246,6 @@ function TicketCard({
       return <span className="text-xs text-red-400 bg-red-900/50 px-1.5 py-0.5 rounded">FAILED</span>
     }
     if (columnType === 'scoped' && ticket.status === 'scoped') {
-      if (hasDevinTriagedLabel && !ticket.analysis) {
-        return <span className="text-xs text-blue-400 bg-blue-900/50 px-1.5 py-0.5 rounded">AUTO-TRIAGED</span>
-      }
       return <span className="text-xs text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">SCOPED</span>
     }
     if (columnType === 'review') {
@@ -290,14 +259,11 @@ function TicketCard({
 
   return (
     <Card className={`${getCardStyles()} p-4 mb-3 hover:border-zinc-500 transition-colors`}>
-      <div className="flex items-center gap-2 mb-2">
-        {getBadge() || (
-          <>
-            <Circle className="w-4 h-4 text-zinc-500" strokeDasharray="4 2" />
-            <span className="text-xs text-zinc-500">Draft</span>
-          </>
-        )}
-      </div>
+      {getBadge() && (
+        <div className="flex items-center gap-2 mb-2">
+          {getBadge()}
+        </div>
+      )}
       <a 
         href={ticket.html_url} 
         target="_blank" 
@@ -318,32 +284,25 @@ function TicketCard({
       )}
 
       {columnType === 'new' && (
-        <Collapsible open={isExpanded}>
-          <CollapsibleTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2 w-full justify-between text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50"
-              onClick={() => onScope(ticket.number)}
-            >
-              <span>Scope</span>
-              {isExpanded ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-2">
-            {isLoading ? (
-              <div className="text-xs text-zinc-500 text-center py-2">
-                Analyzing...
-              </div>
-            ) : analysis ? (
+        <div className="mt-2">
+          <button
+            className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-400 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors"
+            onClick={() => onScope(ticket.number)}
+          >
+            <span>Scope</span>
+            <ChevronDown className="w-4 h-4" />
+          </button>
+          {isLoading && (
+            <div className="text-xs text-zinc-500 text-center py-2 mt-2">
+              Analyzing...
+            </div>
+          )}
+          {analysis && (
+            <div className="mt-2">
               <AnalysisDisplay analysis={analysis} />
-            ) : null}
-          </CollapsibleContent>
-        </Collapsible>
+            </div>
+          )}
+        </div>
       )}
 
       {columnType === 'scoped' && (
@@ -372,7 +331,7 @@ function TicketCard({
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-2">
-                  <AnalysisDisplay analysis={analysis} compact />
+                  <AnalysisDisplay analysis={analysis} />
                 </CollapsibleContent>
               </Collapsible>
             </>
@@ -418,9 +377,8 @@ function TicketCard({
 
           {ticket.status === 'scoped' && !job?.status && (
             <Button
-              variant="outline"
               size="sm"
-              className="mt-2 w-full text-xs border-blue-500 text-blue-400 hover:bg-blue-500/10"
+              className="mt-2 w-full text-xs bg-green-900/50 text-green-400 border border-green-700 hover:bg-green-800/50"
               onClick={() => onExecute(ticket.number)}
             >
               Action
