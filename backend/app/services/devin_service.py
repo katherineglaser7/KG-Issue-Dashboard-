@@ -1,40 +1,27 @@
 """
-Devin integration service (stub implementation).
+Devin API integration service for automated ticket execution.
 
-This module will handle integration with the Devin API for automated
-ticket processing. Currently provides a simulation for development/testing.
+This module handles real integration with the Devin API:
+- Creates Devin sessions to work on GitHub issues
+- Polls for session completion
+- Retrieves PR information when Devin creates PRs
+- All operations hit real Devin and GitHub APIs - no simulated data
 
-To implement real Devin integration:
-1. Add devin_api_key to Settings and .env
-2. Replace simulation methods with actual API calls
-3. Update job status handling based on Devin webhook responses
-
-The service follows the same pattern as other services:
-- Takes Settings in __init__ for configuration
-- Provides async methods for API operations
-- Returns structured responses for the caller
-
-Git worktree support:
-- Each ticket execution gets its own worktree for isolation
-- Worktrees are created at ./worktrees/issue-{number}/
-- Branches are named devin/issue-{number}
-- This allows parallel execution of multiple tickets
+API Reference: https://docs.devin.ai/api-reference/v1/sessions
 """
 
 import asyncio
-import subprocess
-import os
-from pathlib import Path
+import httpx
 from typing import Optional, Callable, Any
 from app.config import Settings
-from app.schemas.models import Job
 
 cancelled_jobs: set[str] = set()
-WORKTREES_DIR = "./worktrees"
+
+DEVIN_API_BASE = "https://api.devin.ai/v1"
 
 
 class DevinService:
-    """Service for Devin API integration (stub with simulation)."""
+    """Service for real Devin API integration."""
     
     def __init__(self, settings: Settings):
         """
@@ -45,6 +32,13 @@ class DevinService:
         """
         self.settings = settings
         self.api_key = settings.devin_api_key
+    
+    def _get_headers(self) -> dict:
+        """Get headers for Devin API requests."""
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
     
     def mark_cancelled(self, job_id: str) -> None:
         """Mark a job as cancelled so execute_task will stop."""
@@ -58,91 +52,85 @@ class DevinService:
         """Remove job from cancelled set."""
         cancelled_jobs.discard(job_id)
     
-    def create_worktree(self, issue_number: int) -> tuple[str, str]:
+    async def create_session(
+        self,
+        prompt: str,
+        title: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+    ) -> dict:
         """
-        Create a git worktree for isolated ticket execution.
+        Create a new Devin session.
         
         Args:
-            issue_number: The issue number to create worktree for
+            prompt: The task prompt for Devin
+            title: Optional custom title for the session
+            tags: Optional list of tags
             
         Returns:
-            Tuple of (worktree_path, branch_name)
+            Dict with session_id and url
             
         Raises:
-            RuntimeError: If worktree creation fails
+            Exception: If API call fails
         """
-        worktree_path = f"{WORKTREES_DIR}/issue-{issue_number}"
-        branch_name = f"devin/issue-{issue_number}"
-        
-        try:
-            Path(WORKTREES_DIR).mkdir(parents=True, exist_ok=True)
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            payload = {
+                "prompt": prompt,
+                "unlisted": False,
+            }
+            if title:
+                payload["title"] = title
+            if tags:
+                payload["tags"] = tags
             
-            if Path(worktree_path).exists():
-                self.cleanup_worktree(issue_number)
-            
-            result = subprocess.run(
-                ["git", "worktree", "add", worktree_path, "-b", branch_name],
-                capture_output=True,
-                text=True,
-                timeout=30
+            response = await client.post(
+                f"{DEVIN_API_BASE}/sessions",
+                headers=self._get_headers(),
+                json=payload,
             )
             
-            if result.returncode != 0:
-                if "already exists" in result.stderr:
-                    result = subprocess.run(
-                        ["git", "worktree", "add", worktree_path, branch_name],
-                        capture_output=True,
-                        text=True,
-                        timeout=30
-                    )
-                    if result.returncode != 0:
-                        raise RuntimeError(f"Failed to create worktree: {result.stderr}")
-                else:
-                    raise RuntimeError(f"Failed to create worktree: {result.stderr}")
+            if response.status_code not in (200, 201):
+                raise Exception(f"Failed to create Devin session: {response.status_code} - {response.text}")
             
-            return worktree_path, branch_name
-            
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("Worktree creation timed out")
-        except FileNotFoundError:
-            return worktree_path, branch_name
+            return response.json()
     
-    def cleanup_worktree(self, issue_number: int) -> None:
+    async def get_session(self, session_id: str) -> dict:
         """
-        Clean up a git worktree and its branch.
+        Get details about an existing Devin session.
         
         Args:
-            issue_number: The issue number to clean up
+            session_id: The session ID to retrieve
+            
+        Returns:
+            Dict with session details including status, pull_request, etc.
         """
-        worktree_path = f"{WORKTREES_DIR}/issue-{issue_number}"
-        branch_name = f"devin/issue-{issue_number}"
-        
-        try:
-            subprocess.run(
-                ["git", "worktree", "remove", worktree_path, "--force"],
-                capture_output=True,
-                text=True,
-                timeout=30
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{DEVIN_API_BASE}/sessions/{session_id}",
+                headers=self._get_headers(),
             )
-        except Exception:
-            pass
+            
+            if response.status_code != 200:
+                raise Exception(f"Failed to get Devin session: {response.status_code} - {response.text}")
+            
+            return response.json()
+    
+    async def terminate_session(self, session_id: str) -> bool:
+        """
+        Terminate a Devin session.
         
-        try:
-            subprocess.run(
-                ["git", "branch", "-D", branch_name],
-                capture_output=True,
-                text=True,
-                timeout=30
+        Args:
+            session_id: The session ID to terminate
+            
+        Returns:
+            True if terminated successfully
+        """
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(
+                f"{DEVIN_API_BASE}/sessions/{session_id}",
+                headers=self._get_headers(),
             )
-        except Exception:
-            pass
-        
-        try:
-            if Path(worktree_path).exists():
-                import shutil
-                shutil.rmtree(worktree_path, ignore_errors=True)
-        except Exception:
-            pass
+            
+            return response.status_code in (200, 204)
     
     async def execute_task(
         self,
@@ -154,78 +142,154 @@ class DevinService:
         worktree_callback: Optional[Callable[..., Any]] = None,
     ) -> None:
         """
-        Execute a task simulation with step-by-step progress.
+        Execute a task using the real Devin API.
         
-        This method simulates the steps a real Devin session would go through:
-        - Step 0: Create worktree for isolated execution
-        - Step 1 (2 sec): Analyzing codebase
-        - Step 2 (3 sec): Implementing solution
-        - Step 3 (2 sec): Running tests
-        - Step 4 (1 sec): Creating pull request
+        This method:
+        1. Creates a Devin session with a prompt to fix the issue
+        2. Polls for session completion
+        3. Retrieves PR information when Devin creates a PR
+        
+        All operations hit real Devin and GitHub APIs - no simulated data.
         
         Args:
             job_id: The job ID to track
             ticket_number: The ticket/issue number
-            ticket_data: Dict containing ticket title, body, etc.
+            ticket_data: Dict containing ticket title, body, repo, etc.
             progress_callback: Function to call with progress updates
             completion_callback: Function to call when complete
-            worktree_callback: Function to call with worktree info after creation
+            worktree_callback: Optional callback for session info
         """
-        worktree_path = None
-        branch_name = f"devin/issue-{ticket_number}"
+        ticket_title = ticket_data.get("title", f"Issue #{ticket_number}")
+        ticket_body = ticket_data.get("body", "")
+        repo = ticket_data.get("repo", self.settings.github_repo)
+        
+        prompt = f"""Please fix the following GitHub issue in the repository {repo}:
+
+Issue #{ticket_number}: {ticket_title}
+
+{ticket_body}
+
+Instructions:
+1. Clone the repository {repo}
+2. Analyze the issue and understand what needs to be fixed
+3. Implement the fix with proper code changes
+4. Create a pull request with your changes
+5. Make sure the PR description references issue #{ticket_number}
+
+Please create a PR when you're done."""
+
+        session_id = None
+        session_url = None
         
         try:
-            try:
-                worktree_path, branch_name = self.create_worktree(ticket_number)
-                if worktree_callback:
-                    await worktree_callback(
-                        job_id=job_id,
-                        worktree_path=worktree_path,
-                        branch_name=branch_name,
-                    )
-            except RuntimeError as e:
-                pass
-            
-            steps = [
-                (2, "Analyzing codebase..."),
-                (3, "Implementing solution..."),
-                (2, "Running tests..."),
-                (1, "Creating pull request..."),
-            ]
-            
-            for i, (duration, step_name) in enumerate(steps):
-                if self.is_cancelled(job_id):
-                    self.clear_cancelled(job_id)
-                    self.cleanup_worktree(ticket_number)
-                    return
-                
-                await progress_callback(
-                    job_id=job_id,
-                    status="running",
-                    current_step=step_name,
-                    steps_completed=i
-                )
-                
-                await asyncio.sleep(duration)
+            await progress_callback(
+                job_id=job_id,
+                status="running",
+                current_step="Creating Devin session...",
+                steps_completed=0
+            )
             
             if self.is_cancelled(job_id):
                 self.clear_cancelled(job_id)
-                self.cleanup_worktree(ticket_number)
                 return
             
-            mock_pr_number = ticket_number + 100
-            mock_pr_url = f"https://github.com/{self.settings.github_repo}/pull/{mock_pr_number}"
+            session_response = await self.create_session(
+                prompt=prompt,
+                title=f"Fix issue #{ticket_number}: {ticket_title[:50]}",
+                tags=[f"issue-{ticket_number}", repo],
+            )
+            
+            session_id = session_response.get("session_id")
+            session_url = session_response.get("url")
+            
+            if worktree_callback:
+                await worktree_callback(
+                    job_id=job_id,
+                    worktree_path=session_url,
+                    branch_name=f"devin-session-{session_id}",
+                )
+            
+            await progress_callback(
+                job_id=job_id,
+                status="running",
+                current_step="Devin is analyzing the codebase...",
+                steps_completed=1
+            )
+            
+            max_poll_time = 3600
+            poll_interval = 30
+            elapsed = 0
+            pr_url = None
+            pr_number = None
+            
+            while elapsed < max_poll_time:
+                if self.is_cancelled(job_id):
+                    self.clear_cancelled(job_id)
+                    if session_id:
+                        await self.terminate_session(session_id)
+                    return
+                
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                
+                try:
+                    session_details = await self.get_session(session_id)
+                except Exception:
+                    continue
+                
+                status_enum = session_details.get("status_enum", "")
+                
+                if status_enum == "working":
+                    step_num = min(1 + (elapsed // 60), 3)
+                    step_messages = [
+                        "Devin is analyzing the codebase...",
+                        "Devin is implementing the solution...",
+                        "Devin is testing and creating PR...",
+                    ]
+                    await progress_callback(
+                        job_id=job_id,
+                        status="running",
+                        current_step=step_messages[min(step_num - 1, 2)],
+                        steps_completed=step_num
+                    )
+                
+                elif status_enum == "blocked":
+                    await progress_callback(
+                        job_id=job_id,
+                        status="running",
+                        current_step=f"Devin needs assistance - check {session_url}",
+                        steps_completed=2
+                    )
+                
+                elif status_enum == "finished":
+                    pull_request = session_details.get("pull_request")
+                    if pull_request:
+                        pr_url = pull_request.get("url")
+                        if pr_url:
+                            parts = pr_url.rstrip("/").split("/")
+                            try:
+                                pr_number = int(parts[-1])
+                            except (ValueError, IndexError):
+                                pr_number = None
+                    break
+                
+                elif status_enum in ("expired", "suspend_requested"):
+                    raise Exception(f"Devin session ended unexpectedly: {status_enum}")
+            
+            if elapsed >= max_poll_time:
+                raise Exception("Devin session timed out after 1 hour")
             
             await completion_callback(
                 job_id=job_id,
                 ticket_number=ticket_number,
-                pr_number=mock_pr_number,
-                pr_url=mock_pr_url,
-                branch_name=branch_name,
+                pr_number=pr_number,
+                pr_url=pr_url,
+                branch_name=f"devin-session-{session_id}" if session_id else None,
+                session_id=session_id,
+                session_url=session_url,
             )
             
         except Exception as e:
-            self.cleanup_worktree(ticket_number)
             await progress_callback(
                 job_id=job_id,
                 status="failed",

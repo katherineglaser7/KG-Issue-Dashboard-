@@ -260,7 +260,7 @@ async def execute_ticket(
     Start execution of a scoped ticket.
     
     Creates a job, updates ticket status to in_progress, and starts
-    background execution task.
+    background execution task with real GitHub data.
     """
     ticket = ticket_repository.get_by_repo_and_number(
         repo=settings.github_repo,
@@ -273,6 +273,9 @@ async def execute_ticket(
             detail="Ticket must be in 'scoped' status to execute"
         )
     
+    github_service = get_github_service(settings)
+    issue = await github_service.get_issue(ticket_number)
+    
     job = job_repository.create(ticket_id=ticket.id, total_steps=4)
     
     ticket_repository.update_status(
@@ -281,7 +284,6 @@ async def execute_ticket(
         status="in_progress",
     )
     
-    github_service = get_github_service(settings)
     try:
         await github_service.add_label(ticket_number, "in-progress")
     except Exception:
@@ -293,7 +295,11 @@ async def execute_ticket(
         await devin_service.execute_task(
             job_id=job.id,
             ticket_number=ticket_number,
-            ticket_data={"title": ticket_number},
+            ticket_data={
+                "title": issue.get("title", f"Issue #{ticket_number}"),
+                "body": issue.get("body", ""),
+                "repo": settings.github_repo,
+            },
             progress_callback=_update_job_progress,
             completion_callback=lambda **kwargs: _complete_job(**kwargs, settings=settings),
             worktree_callback=_update_worktree_info,
@@ -391,7 +397,7 @@ async def get_ticket_pr(
     """
     Get PR information for a ticket.
     
-    Returns mock PR data for simulated PRs or fetches from GitHub for real PRs.
+    Fetches real PR data from GitHub API - no simulated data.
     """
     ticket = ticket_repository.get_by_repo_and_number(
         repo=settings.github_repo,
@@ -404,6 +410,14 @@ async def get_ticket_pr(
     if not ticket.pr_number:
         raise HTTPException(status_code=404, detail="No PR associated with this ticket")
     
+    github_service = get_github_service(settings)
+    
+    try:
+        pr_data = await github_service.get_pull_request(ticket.pr_number)
+        pr_files = await github_service.get_pull_request_files(ticket.pr_number)
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="PR not found on GitHub")
+    
     root_issue = "Issue description"
     if ticket.scope_data:
         try:
@@ -412,19 +426,25 @@ async def get_ticket_pr(
         except (json.JSONDecodeError, TypeError):
             pass
     
+    files_changed = [
+        {
+            "filename": f.get("filename", "unknown"),
+            "additions": f.get("additions", 0),
+            "deletions": f.get("deletions", 0),
+        }
+        for f in pr_files[:10]
+    ]
+    
     return {
-        "pr_number": ticket.pr_number,
-        "pr_url": ticket.pr_url,
-        "pr_state": "open",
-        "title": f"Fix: Issue #{ticket_number}",
-        "branch_name": f"devin/issue-{ticket_number}",
+        "pr_number": pr_data.get("number"),
+        "pr_url": pr_data.get("html_url"),
+        "pr_state": pr_data.get("state", "open"),
+        "title": pr_data.get("title", f"Fix: Issue #{ticket_number}"),
+        "branch_name": pr_data.get("head", {}).get("ref", f"devin/issue-{ticket_number}"),
         "summary": {
             "problem": root_issue[:80] if len(root_issue) > 80 else root_issue,
-            "solution": f"Implemented fix for issue #{ticket_number}",
-            "files_changed": [
-                {"filename": "src/main.py", "additions": 15, "deletions": 3},
-                {"filename": "tests/test_main.py", "additions": 25, "deletions": 0},
-            ]
+            "solution": pr_data.get("body", "")[:200] if pr_data.get("body") else f"Implemented fix for issue #{ticket_number}",
+            "files_changed": files_changed
         }
     }
 

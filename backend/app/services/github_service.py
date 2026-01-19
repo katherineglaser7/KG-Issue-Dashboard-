@@ -220,6 +220,102 @@ class GitHubService:
                 pr for pr in prs
                 if issue_ref in (pr.get("title", "") + (pr.get("body") or ""))
             ]
+    
+    async def get_pull_request(self, pr_number: int) -> dict:
+        """
+        Fetch a single pull request by number.
+        
+        Args:
+            pr_number: The PR number to fetch
+        
+        Returns:
+            PR dictionary from GitHub API
+        
+        Raises:
+            HTTPException: If PR not found or API error
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/repos/{self.repo}/pulls/{pr_number}",
+                headers=self._get_headers()
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"GitHub API error: {response.text}"
+                )
+            
+            return response.json()
+    
+    async def get_pull_request_files(self, pr_number: int) -> list[dict]:
+        """
+        Fetch files changed in a pull request.
+        
+        Args:
+            pr_number: The PR number
+        
+        Returns:
+            List of file change dictionaries
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/repos/{self.repo}/pulls/{pr_number}/files",
+                headers=self._get_headers()
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"GitHub API error: {response.text}"
+                )
+            
+            return response.json()
+    
+    async def create_pull_request(
+        self,
+        title: str,
+        head: str,
+        base: str = "main",
+        body: str = "",
+        draft: bool = False
+    ) -> dict:
+        """
+        Create a new pull request.
+        
+        Args:
+            title: PR title
+            head: Branch containing changes
+            base: Branch to merge into (default: main)
+            body: PR description
+            draft: Whether to create as draft PR
+        
+        Returns:
+            Created PR dictionary from GitHub API
+        
+        Raises:
+            HTTPException: If API error occurs
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/repos/{self.repo}/pulls",
+                headers=self._get_headers(),
+                json={
+                    "title": title,
+                    "head": head,
+                    "base": base,
+                    "body": body,
+                    "draft": draft
+                }
+            )
+            
+            if response.status_code not in (200, 201):
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"GitHub API error: {response.text}"
+                )
+            
+            return response.json()
 
 
 def get_github_service(settings: Settings) -> GitHubService:
