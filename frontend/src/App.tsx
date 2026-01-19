@@ -539,9 +539,10 @@ function App() {
     }
   }, [])
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (repo?: string) => {
+    const targetRepo = repo || currentRepo
     try {
-      const response = await fetch(`${API_URL}/api/tickets`)
+      const response = await fetch(`${API_URL}/api/tickets?repo=${encodeURIComponent(targetRepo)}`)
       if (!response.ok) {
         throw new Error('Failed to fetch tickets')
       }
@@ -561,7 +562,7 @@ function App() {
 
     const poll = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/job`)
+        const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/job?repo=${encodeURIComponent(currentRepo)}`)
         if (!response.ok) {
           throw new Error('Failed to fetch job status')
         }
@@ -602,7 +603,7 @@ function App() {
 
     poll()
     pollingIntervals.current[ticketNumber] = setInterval(poll, 2000)
-  }, [])
+  }, [currentRepo])
 
   const handleExecute = async (ticketNumber: number) => {
     try {
@@ -611,7 +612,7 @@ function App() {
         [ticketNumber]: { job: null, isPolling: true, error: null }
       }))
 
-      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/execute`, {
+      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/execute?repo=${encodeURIComponent(currentRepo)}`, {
         method: 'POST',
       })
       
@@ -647,7 +648,7 @@ function App() {
         delete pollingIntervals.current[ticketNumber]
       }
 
-      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/cancel`, {
+      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/cancel?repo=${encodeURIComponent(currentRepo)}`, {
         method: 'POST',
       })
       
@@ -676,7 +677,7 @@ function App() {
 
   const handleComplete = async (ticketNumber: number) => {
     try {
-      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/complete`, {
+      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/complete?repo=${encodeURIComponent(currentRepo)}`, {
         method: 'POST',
       })
       
@@ -719,7 +720,7 @@ function App() {
     }))
 
     try {
-      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/scope`)
+      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/scope?repo=${encodeURIComponent(currentRepo)}`)
       if (!response.ok) {
         throw new Error('Failed to scope ticket')
       }
@@ -748,14 +749,28 @@ function App() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await fetchTickets()
+    setScopeData({})
+    setJobData({})
+    await fetchTickets(currentRepo)
     setIsRefreshing(false)
   }
 
-  const handleAddRepo = () => {
+  const handleAddRepo = async () => {
     if (repoInput.trim()) {
-      setCurrentRepo(repoInput.trim())
+      let newRepo = repoInput.trim()
+      // Handle full GitHub URLs
+      if (newRepo.includes('github.com/')) {
+        const match = newRepo.match(/github\.com\/([^\/]+\/[^\/]+)/)
+        if (match) {
+          newRepo = match[1].replace(/\.git$/, '')
+        }
+      }
+      setCurrentRepo(newRepo)
       setRepoInput('')
+      setLoading(true)
+      setScopeData({})
+      setJobData({})
+      await fetchTickets(newRepo)
     }
   }
 

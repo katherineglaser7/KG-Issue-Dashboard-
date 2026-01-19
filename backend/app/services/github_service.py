@@ -25,16 +25,17 @@ from app.config import Settings
 class GitHubService:
     """Service for interacting with the GitHub API."""
     
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, repo: str | None = None):
         """
         Initialize with application settings.
         
         Args:
             settings: Application settings containing github_token and github_repo
+            repo: Optional repo override (format: owner/repo). If not provided, uses settings.github_repo
         """
         self.settings = settings
         self.base_url = "https://api.github.com"
-        self.repo = settings.github_repo
+        self.repo = repo or settings.github_repo
     
     def _get_headers(self) -> dict[str, str]:
         """Build headers for GitHub API requests."""
@@ -318,6 +319,11 @@ class GitHubService:
             return response.json()
 
 
-def get_github_service(settings: Settings) -> GitHubService:
-    """Factory function for dependency injection."""
-    return GitHubService(settings)
+def get_github_service(settings: Settings, repo: str | None = None) -> GitHubService:
+    """Factory function for dependency injection.
+    
+    Args:
+        settings: Application settings
+        repo: Optional repo override (format: owner/repo)
+    """
+    return GitHubService(settings, repo=repo)

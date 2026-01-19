@@ -110,19 +110,24 @@ def _issue_to_ticket(issue: dict, db_ticket=None, job=None) -> Ticket:
 
 @router.get("", response_model=TicketListResponse)
 async def get_tickets(
+    repo: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> TicketListResponse:
     """
     Fetch all tickets from GitHub, merged with database state.
     
+    Args:
+        repo: Optional repo override (format: owner/repo). If not provided, uses default from settings.
+    
     Returns both open and closed issues as tickets, excluding pull requests.
     Database status (scoped, in_progress, review) takes precedence over GitHub labels.
     For in_progress tickets, includes the latest job data.
     """
-    github_service = get_github_service(settings)
+    target_repo = repo or settings.github_repo
+    github_service = get_github_service(settings, repo=target_repo)
     issues = await github_service.get_issues(state="all")
     
-    db_tickets = ticket_repository.get_all(repo=settings.github_repo)
+    db_tickets = ticket_repository.get_all(repo=target_repo)
     db_tickets_by_number = {t.issue_number: t for t in db_tickets}
     
     tickets = []
@@ -144,31 +149,37 @@ async def get_tickets(
 @router.get("/{ticket_number}/scope", response_model=ScopeResponse)
 async def scope_ticket(
     ticket_number: int,
+    repo: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> ScopeResponse:
     """
     Analyze a ticket and return full analysis with confidence score.
     
+    Args:
+        ticket_number: The issue number to scope
+        repo: Optional repo override (format: owner/repo)
+    
     Fetches the issue from GitHub, performs analysis (root issue, action plan,
     confidence score), stores the analysis in the database, and sets status to "scoped".
     """
-    github_service = get_github_service(settings)
+    target_repo = repo or settings.github_repo
+    github_service = get_github_service(settings, repo=target_repo)
     scoring_service = get_scoring_service(settings)
     
     issue = await github_service.get_issue(ticket_number)
     analysis = scoring_service.analyze_ticket(issue)
     
     ticket_repository.create_or_update(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
     )
     ticket_repository.update_scope_data(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
         scope_data=analysis.model_dump_json(),
     )
     ticket_repository.update_status(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
         status="scoped",
     )
@@ -204,8 +215,10 @@ async def _complete_job(
     pr_url: str,
     branch_name: str,
     settings: Settings,
+    target_repo: str | None = None,
 ) -> None:
     """Callback when job completes successfully."""
+    repo = target_repo or settings.github_repo
     job_repository.update_status(
         job_id=job_id,
         status="completed",
@@ -214,7 +227,7 @@ async def _complete_job(
     )
     
     ticket_repository.update_status(
-        repo=settings.github_repo,
+        repo=repo,
         issue_number=ticket_number,
         status="review",
     )
@@ -223,10 +236,10 @@ async def _complete_job(
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE tickets SET pr_number = ?, pr_url = ?, updated_at = CURRENT_TIMESTAMP WHERE repo = ? AND issue_number = ?",
-            (pr_number, pr_url, settings.github_repo, ticket_number)
+            (pr_number, pr_url, repo, ticket_number)
         )
     
-    github_service = get_github_service(settings)
+    github_service = get_github_service(settings, repo=repo)
     try:
         await github_service.remove_label(ticket_number, "in-progress")
     except Exception:
@@ -254,16 +267,22 @@ async def _update_worktree_info(
 async def execute_ticket(
     ticket_number: int,
     background_tasks: BackgroundTasks,
+    repo: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
     Start execution of a scoped ticket.
     
+    Args:
+        ticket_number: The issue number to execute
+        repo: Optional repo override (format: owner/repo)
+    
     Creates a job, updates ticket status to in_progress, and starts
     background execution task with real GitHub data.
     """
+    target_repo = repo or settings.github_repo
     ticket = ticket_repository.get_by_repo_and_number(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
     )
     
@@ -273,13 +292,13 @@ async def execute_ticket(
             detail="Ticket must be in 'scoped' status to execute"
         )
     
-    github_service = get_github_service(settings)
+    github_service = get_github_service(settings, repo=target_repo)
     issue = await github_service.get_issue(ticket_number)
     
     job = job_repository.create(ticket_id=ticket.id, total_steps=4)
     
     ticket_repository.update_status(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
         status="in_progress",
     )
@@ -298,10 +317,10 @@ async def execute_ticket(
             ticket_data={
                 "title": issue.get("title", f"Issue #{ticket_number}"),
                 "body": issue.get("body", ""),
-                "repo": settings.github_repo,
+                "repo": target_repo,
             },
             progress_callback=_update_job_progress,
-            completion_callback=lambda **kwargs: _complete_job(**kwargs, settings=settings),
+            completion_callback=lambda **kwargs: _complete_job(**kwargs, settings=settings, target_repo=target_repo),
             worktree_callback=_update_worktree_info,
         )
     
@@ -313,13 +332,19 @@ async def execute_ticket(
 @router.get("/{ticket_number}/job", response_model=JobResponse)
 async def get_ticket_job(
     ticket_number: int,
+    repo: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> JobResponse:
     """
     Get the latest job for a ticket.
+    
+    Args:
+        ticket_number: The issue number
+        repo: Optional repo override (format: owner/repo)
     """
+    target_repo = repo or settings.github_repo
     ticket = ticket_repository.get_by_repo_and_number(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
     )
     
@@ -347,13 +372,19 @@ async def get_ticket_job(
 @router.post("/{ticket_number}/cancel")
 async def cancel_ticket_job(
     ticket_number: int,
+    repo: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
     Cancel a running job for a ticket.
+    
+    Args:
+        ticket_number: The issue number
+        repo: Optional repo override (format: owner/repo)
     """
+    target_repo = repo or settings.github_repo
     ticket = ticket_repository.get_by_repo_and_number(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
     )
     
@@ -375,12 +406,12 @@ async def cancel_ticket_job(
     )
     
     ticket_repository.update_status(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
         status="scoped",
     )
     
-    github_service = get_github_service(settings)
+    github_service = get_github_service(settings, repo=target_repo)
     try:
         await github_service.remove_label(ticket_number, "in-progress")
     except Exception:
@@ -392,15 +423,21 @@ async def cancel_ticket_job(
 @router.get("/{ticket_number}/pr")
 async def get_ticket_pr(
     ticket_number: int,
+    repo: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
     Get PR information for a ticket.
     
+    Args:
+        ticket_number: The issue number
+        repo: Optional repo override (format: owner/repo)
+    
     Fetches real PR data from GitHub API - no simulated data.
     """
+    target_repo = repo or settings.github_repo
     ticket = ticket_repository.get_by_repo_and_number(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
     )
     
@@ -410,7 +447,7 @@ async def get_ticket_pr(
     if not ticket.pr_number:
         raise HTTPException(status_code=404, detail="No PR associated with this ticket")
     
-    github_service = get_github_service(settings)
+    github_service = get_github_service(settings, repo=target_repo)
     
     try:
         pr_data = await github_service.get_pull_request(ticket.pr_number)
@@ -452,15 +489,21 @@ async def get_ticket_pr(
 @router.post("/{ticket_number}/complete")
 async def complete_ticket(
     ticket_number: int,
+    repo: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
     Mark a ticket as complete.
     
+    Args:
+        ticket_number: The issue number
+        repo: Optional repo override (format: owner/repo)
+    
     Updates ticket status to complete, adds implemented label, and triggers cleanup.
     """
+    target_repo = repo or settings.github_repo
     ticket = ticket_repository.get_by_repo_and_number(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
     )
     
@@ -474,12 +517,12 @@ async def complete_ticket(
         )
     
     ticket_repository.update_status(
-        repo=settings.github_repo,
+        repo=target_repo,
         issue_number=ticket_number,
         status="complete",
     )
     
-    github_service = get_github_service(settings)
+    github_service = get_github_service(settings, repo=target_repo)
     try:
         await github_service.remove_label(ticket_number, "review")
     except Exception:
