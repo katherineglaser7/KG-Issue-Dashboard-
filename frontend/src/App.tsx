@@ -258,24 +258,13 @@ function TicketCard({
         #{ticket.number} {ticket.title}
       </a>
 
-      {ticket.labels.length > 0 && columnType === 'new' && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          {ticket.labels.map((label) => (
-            <span key={label} className="text-xs text-zinc-400 bg-zinc-700/50 px-1.5 py-0.5 rounded">
-              {label}
-            </span>
-          ))}
-        </div>
-      )}
-
       {columnType === 'new' && (
         <div className="mt-2">
           <button
-            className="w-full flex items-center justify-between px-3 py-2 text-sm text-zinc-400 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors"
+            className="w-full px-3 py-2 text-sm text-zinc-400 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors"
             onClick={() => onScope(ticket.number)}
           >
-            <span>Scope</span>
-            <ChevronDown className="w-4 h-4" />
+            Scope
           </button>
           {isLoading && (
             <div className="text-xs text-zinc-500 text-center py-2 mt-2">
