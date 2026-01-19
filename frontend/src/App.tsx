@@ -157,9 +157,9 @@ function ProgressBar({ score, maxScore = 25 }: { score: number; maxScore?: numbe
 function AnalysisDisplay({ analysis }: { analysis: TicketAnalysis }) {
   const dimensionLabels: Record<string, string> = {
     requirement_clarity: 'Requirement Clarity',
-    blast_radius: 'Code Complexity',
+    blast_radius: 'Blast Radius',
     system_sensitivity: 'System Sensitivity',
-    testability: 'Test Coverage',
+    testability: 'Testability',
   }
 
   return (
