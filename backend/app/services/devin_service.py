@@ -52,6 +52,16 @@ class DevinService:
         """Remove job from cancelled set."""
         cancelled_jobs.discard(job_id)
     
+    def cleanup_worktree(self, issue_number: int) -> None:
+        """
+        Cleanup resources after ticket completion.
+
+        For Devin API integration, this is a no-op since Devin manages
+        its own session cleanup. This method exists for interface
+        compatibility and future local worktree support.
+        """
+        pass
+    
     async def create_session(
         self,
         prompt: str,
@@ -206,7 +216,7 @@ Please create a PR when you're done."""
                 await worktree_callback(
                     job_id=job_id,
                     worktree_path=session_url,
-                    branch_name=f"devin-session-{session_id}",
+                    branch_name=f"devin/issue-{ticket_number}",
                 )
             
             await progress_callback(
@@ -284,7 +294,7 @@ Please create a PR when you're done."""
                 ticket_number=ticket_number,
                 pr_number=pr_number,
                 pr_url=pr_url,
-                branch_name=f"devin-session-{session_id}" if session_id else None,
+                branch_name=f"devin/issue-{ticket_number}" if session_id else None,
                 session_id=session_id,
                 session_url=session_url,
             )
