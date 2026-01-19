@@ -155,12 +155,6 @@ function ProgressBar({ score, maxScore = 25 }: { score: number; maxScore?: numbe
 }
 
 function AnalysisDisplay({ analysis }: { analysis: TicketAnalysis }) {
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-400'
-    if (score >= 60) return 'text-yellow-400'
-    return 'text-red-400'
-  }
-
   const dimensionLabels: Record<string, string> = {
     requirement_clarity: 'Requirement Clarity',
     blast_radius: 'Code Complexity',
@@ -169,25 +163,16 @@ function AnalysisDisplay({ analysis }: { analysis: TicketAnalysis }) {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-zinc-400">Confidence Score</span>
-        <span className={`text-xl font-bold ${getScoreColor(analysis.confidence_score.total)}`}>
-          {analysis.confidence_score.total}/100
-        </span>
-      </div>
-
-      <div className="space-y-2">
-        {Object.entries(analysis.confidence_score.breakdown).map(([key, value]) => (
-          <div key={key}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-zinc-400">{dimensionLabels[key] || key}</span>
-              <span className="text-xs text-zinc-400">{value.score}/25</span>
-            </div>
-            <ProgressBar score={value.score} />
+    <div className="space-y-2">
+      {Object.entries(analysis.confidence_score.breakdown).map(([key, value]) => (
+        <div key={key}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-zinc-400">{dimensionLabels[key] || key}</span>
+            <span className="text-xs text-zinc-400">{value.score}/25</span>
           </div>
-        ))}
-      </div>
+          <ProgressBar score={value.score} />
+        </div>
+      ))}
     </div>
   )
 }
@@ -786,7 +771,7 @@ function App() {
               variant="outline"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
             >
               {isRefreshing ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
