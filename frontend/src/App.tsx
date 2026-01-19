@@ -261,7 +261,7 @@ function TicketCard({
       {columnType === 'new' && (
         <div className="mt-2">
           <button
-            className="w-full px-3 py-2 text-sm text-zinc-400 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors"
+            className="w-full px-3 py-2 text-xs text-zinc-400 bg-transparent border border-zinc-600 rounded hover:bg-zinc-800 transition-colors"
             onClick={() => onScope(ticket.number)}
           >
             Scope
