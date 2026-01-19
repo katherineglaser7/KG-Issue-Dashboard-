@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronDown, ChevronUp, Circle, Plus, MoreHorizontal, Filter, HelpCircle, ExternalLink, X, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Circle, HelpCircle, ExternalLink, X, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/collapsible'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const DEFAULT_REPO = 'katherineglaser7/devin-automation-test'
 
 interface JobStatus {
   id: string
@@ -135,6 +136,24 @@ function ConfidenceTooltip({ breakdown }: { breakdown: ConfidenceBreakdown }) {
   )
 }
 
+function ProgressBar({ score, maxScore = 25 }: { score: number; maxScore?: number }) {
+  const percentage = (score / maxScore) * 100
+  const getBarColor = () => {
+    if (score >= 15) return 'bg-green-500'
+    if (score >= 10) return 'bg-yellow-500'
+    return 'bg-orange-500'
+  }
+
+  return (
+    <div className="flex-1 h-2 bg-zinc-700 rounded-full overflow-hidden">
+      <div 
+        className={`h-full rounded-full ${getBarColor()}`}
+        style={{ width: `${percentage}%` }}
+      />
+    </div>
+  )
+}
+
 function AnalysisDisplay({ analysis, compact = false }: { analysis: TicketAnalysis; compact?: boolean }) {
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-400'
@@ -142,66 +161,57 @@ function AnalysisDisplay({ analysis, compact = false }: { analysis: TicketAnalys
     return 'text-red-400'
   }
 
+  const dimensionLabels: Record<string, string> = {
+    requirement_clarity: 'Requirement Clarity',
+    blast_radius: 'Blast Radius',
+    system_sensitivity: 'System Sensitivity',
+    testability: 'Testability',
+  }
+
   return (
-    <div className="bg-zinc-900/50 rounded-md p-3 space-y-3">
+    <div className="space-y-3">
       {!compact && (
         <div className="flex items-center justify-between">
-          <span className="text-xs text-zinc-400">Confidence Score</span>
-          <div className="flex items-center">
-            <span className={`text-lg font-bold ${getScoreColor(analysis.confidence_score.total)}`}>
-              {analysis.confidence_score.total}/100
-            </span>
-            <ConfidenceTooltip breakdown={analysis.confidence_score.breakdown} />
-          </div>
+          <span className="text-sm text-zinc-400">Confidence Score</span>
+          <span className={`text-xl font-bold ${getScoreColor(analysis.confidence_score.total)}`}>
+            {analysis.confidence_score.total}/100
+          </span>
         </div>
       )}
 
-      <div>
-        <span className="text-xs text-zinc-400 block mb-1">Root Issue</span>
-        <p className="text-xs text-zinc-300">{analysis.root_issue}</p>
-      </div>
-
-      <div>
-        <span className="text-xs text-zinc-400 block mb-1">Action Plan</span>
-        <ul className="space-y-1">
-          {analysis.action_plan.map((step, idx) => (
-            <li key={idx} className="text-xs text-zinc-300 flex items-start gap-2">
-              <span className="text-zinc-500">{idx + 1}.</span>
-              {step}
-            </li>
-          ))}
-        </ul>
-      </div>
-
       {!compact && (
-        <div className="space-y-2 pt-2 border-t border-zinc-700">
-          <span className="text-xs text-zinc-400 block">Score Breakdown</span>
-          {Object.entries(analysis.confidence_score.breakdown).map(([key, value]) => {
-            const labels: Record<string, string> = {
-              requirement_clarity: 'Requirement Clarity',
-              blast_radius: 'Blast Radius',
-              system_sensitivity: 'System Sensitivity',
-              testability: 'Testability',
-            }
-            return (
-              <div key={key} className="flex items-center justify-between">
-                <span className="text-xs text-zinc-500">{labels[key] || key}</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-16 h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full ${
-                        value.score >= 20 ? 'bg-green-500' : 
-                        value.score >= 15 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${(value.score / 25) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-zinc-400 w-8 text-right">{value.score}/25</span>
-                </div>
+        <div className="space-y-3">
+          {Object.entries(analysis.confidence_score.breakdown).map(([key, value]) => (
+            <div key={key}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-zinc-400">{dimensionLabels[key] || key}</span>
+                <span className="text-xs text-zinc-400">{value.score}/25</span>
               </div>
-            )
-          })}
+              <ProgressBar score={value.score} />
+            </div>
+          ))}
         </div>
+      )}
+
+      {compact && (
+        <>
+          <div>
+            <span className="text-xs text-zinc-400 block mb-1">Root Issue</span>
+            <p className="text-xs text-zinc-300">{analysis.root_issue}</p>
+          </div>
+
+          <div>
+            <span className="text-xs text-zinc-400 block mb-1">Action Plan</span>
+            <ul className="space-y-1">
+              {analysis.action_plan.map((step, idx) => (
+                <li key={idx} className="text-xs text-zinc-300 flex items-start gap-2">
+                  <span className="text-zinc-500">{idx + 1}.</span>
+                  {step}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
       )}
     </div>
   )
@@ -274,25 +284,22 @@ function TicketCard({
   }
 
   return (
-    <Card className={`${getCardStyles()} p-3 mb-2 hover:border-zinc-500 transition-colors`}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2">
-          {getBadge() || (
-            <>
-              <Circle className="w-4 h-4 text-zinc-500" strokeDasharray="4 2" />
-              <span className="text-xs text-zinc-500">New</span>
-            </>
-          )}
-        </div>
-        <MoreHorizontal className="w-4 h-4 text-zinc-500 cursor-pointer hover:text-zinc-300" />
+    <Card className={`${getCardStyles()} p-4 mb-3 hover:border-zinc-500 transition-colors`}>
+      <div className="flex items-center gap-2 mb-2">
+        {getBadge() || (
+          <>
+            <Circle className="w-4 h-4 text-zinc-500" strokeDasharray="4 2" />
+            <span className="text-xs text-zinc-500">Draft</span>
+          </>
+        )}
       </div>
       <a 
         href={ticket.html_url} 
         target="_blank" 
         rel="noopener noreferrer"
-        className="block mt-2 text-sm text-zinc-200 hover:text-white"
+        className="block text-sm font-medium text-zinc-200 hover:text-white"
       >
-        {ticket.title}
+        #{ticket.number} {ticket.title}
       </a>
 
       {ticket.labels.length > 0 && columnType === 'new' && (
@@ -488,17 +495,14 @@ function Column({
   onComplete: (ticketNumber: number) => void
 }){
   return (
-    <div className="flex-1 min-w-72">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-medium text-zinc-300">{title}</h2>
-          <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">
-            {count}
-          </span>
-        </div>
-        <MoreHorizontal className="w-4 h-4 text-zinc-500 cursor-pointer hover:text-zinc-300" />
+    <div className="flex-1 min-w-80 bg-zinc-900/50 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-base font-semibold text-zinc-200">{title}</h2>
+        <span className="text-xs text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded-full">
+          {count}
+        </span>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {tickets.map((ticket) => (
           <TicketCard 
             key={ticket.id} 
@@ -523,6 +527,9 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [scopeData, setScopeData] = useState<ScopeData>({})
   const [jobData, setJobData] = useState<JobData>({})
+  const [repoInput, setRepoInput] = useState('')
+  const [currentRepo, setCurrentRepo] = useState(DEFAULT_REPO)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const pollingIntervals = useRef<{ [key: number]: NodeJS.Timeout }>({})
 
   useEffect(() => {
@@ -739,10 +746,22 @@ function App() {
     }
   }
 
-  const newTickets = tickets.filter(t => t.status === 'new' || t.status === 'todo')
-  const scopedTickets = tickets.filter(t => t.status === 'scoped' || t.status === 'in_progress')
-  const reviewTickets = tickets.filter(t => t.status === 'review')
-  const completeTickets = tickets.filter(t => t.status === 'complete' || t.status === 'done')
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await fetchTickets()
+    setIsRefreshing(false)
+  }
+
+  const handleAddRepo = () => {
+    if (repoInput.trim()) {
+      setCurrentRepo(repoInput.trim())
+      setRepoInput('')
+    }
+  }
+
+  const todoTickets = tickets.filter(t => t.status === 'new' || t.status === 'todo' || t.status === 'scoped')
+  const inProgressTickets = tickets.filter(t => t.status === 'in_progress')
+  const doneTickets = tickets.filter(t => t.status === 'review' || t.status === 'complete' || t.status === 'done')
 
   if (loading) {
     return (
@@ -762,28 +781,48 @@ function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-      <div className="p-4">
-        <div className="flex items-center gap-4 mb-6">
-            <div className="flex items-center gap-2 bg-zinc-800/50 px-3 py-1.5 rounded-md">
-              <span className="text-sm text-zinc-300">Issue Dashboard</span>
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-xl font-semibold text-zinc-100">Devin Issues Triage</h1>
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              value={repoInput}
+              onChange={(e) => setRepoInput(e.target.value)}
+              placeholder="Paste repo URL or org/repo"
+              className="w-72 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+              onKeyDown={(e) => e.key === 'Enter' && handleAddRepo()}
+            />
+            <Button
+              onClick={handleAddRepo}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2"
+            >
+              Add Repo
+            </Button>
+            <div className="flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2">
+              <span className="text-sm text-zinc-300">{currentRepo}</span>
               <ChevronDown className="w-4 h-4 text-zinc-500" />
             </div>
-          <button className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300">
-            <Plus className="w-4 h-4" />
-            New view
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 mb-6 text-zinc-500">
-          <Filter className="w-4 h-4" />
-          <span className="text-sm">Filter by keyword or by field</span>
+            <Button
+              variant="outline"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            >
+              {isRefreshing ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                'Refresh'
+              )}
+            </Button>
+          </div>
         </div>
 
         <div className="flex gap-6 overflow-x-auto pb-4">
           <Column 
-            title="New" 
-            count={newTickets.length} 
-            tickets={newTickets}
+            title="Todo" 
+            count={todoTickets.length} 
+            tickets={todoTickets}
             scopeData={scopeData}
             onScope={handleScope}
             columnType="new"
@@ -793,9 +832,9 @@ function App() {
             onComplete={handleComplete}
           />
           <Column 
-            title="Scoped" 
-            count={scopedTickets.length} 
-            tickets={scopedTickets}
+            title="In Progress" 
+            count={inProgressTickets.length} 
+            tickets={inProgressTickets}
             scopeData={scopeData}
             onScope={handleScope}
             columnType="scoped"
@@ -805,21 +844,9 @@ function App() {
             onComplete={handleComplete}
           />
           <Column 
-            title="Review" 
-            count={reviewTickets.length} 
-            tickets={reviewTickets}
-            scopeData={scopeData}
-            onScope={handleScope}
-            columnType="review"
-            jobData={jobData}
-            onExecute={handleExecute}
-            onCancel={handleCancel}
-            onComplete={handleComplete}
-          />
-          <Column 
-            title="Complete" 
-            count={completeTickets.length} 
-            tickets={completeTickets}
+            title="Done" 
+            count={doneTickets.length} 
+            tickets={doneTickets}
             scopeData={scopeData}
             onScope={handleScope}
             columnType="complete"
@@ -828,11 +855,6 @@ function App() {
             onCancel={handleCancel}
             onComplete={handleComplete}
           />
-          <div className="flex items-start">
-            <button className="p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 rounded-md">
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
         </div>
       </div>
     </div>
