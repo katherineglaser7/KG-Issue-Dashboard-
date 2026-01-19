@@ -54,13 +54,21 @@ def _determine_status(issue: dict) -> str:
 def _issue_to_ticket(issue: dict, db_ticket=None, job=None) -> Ticket:
     """Convert a GitHub issue dict to a Ticket model.
     
-    If db_ticket is provided, use its status and analysis data instead of
-    deriving status from GitHub labels.
+    Status logic:
+    1. If we have a db_ticket with a tracked status, use that
+    2. If issue has "devin:triaged" label, treat as "scoped" (auto-triage)
+    3. Otherwise, issue is "new" (closed issues without db tracking are ignored)
+    
+    Note: We only show issues as "complete" if they were processed through our
+    dashboard, not just because they're closed on GitHub.
     """
+    labels = [label.get("name", "").lower() for label in issue.get("labels", [])]
+    
     if db_ticket and db_ticket.status in ("scoped", "in_progress", "review", "complete"):
         status = db_ticket.status
-    elif issue.get("state") == "closed":
-        status = "complete"
+    elif "devin:triaged" in labels:
+        # Auto-move issues with devin:triaged label to scoped
+        status = "scoped"
     else:
         status = "new"
     

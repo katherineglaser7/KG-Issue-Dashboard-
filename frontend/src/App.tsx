@@ -265,6 +265,8 @@ function TicketCard({
   }
 
   const getBadge = () => {
+    const hasDevinTriagedLabel = ticket.labels.some(l => l.toLowerCase() === 'devin:triaged')
+    
     if (ticket.status === 'in_progress' || job?.status === 'running') {
       return <span className="text-xs text-yellow-400 bg-yellow-900/50 px-1.5 py-0.5 rounded">IN PROGRESS</span>
     }
@@ -272,6 +274,9 @@ function TicketCard({
       return <span className="text-xs text-red-400 bg-red-900/50 px-1.5 py-0.5 rounded">FAILED</span>
     }
     if (columnType === 'scoped' && ticket.status === 'scoped') {
+      if (hasDevinTriagedLabel && !ticket.analysis) {
+        return <span className="text-xs text-blue-400 bg-blue-900/50 px-1.5 py-0.5 rounded">AUTO-TRIAGED</span>
+      }
       return <span className="text-xs text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">SCOPED</span>
     }
     if (columnType === 'review') {
