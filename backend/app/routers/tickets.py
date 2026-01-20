@@ -56,19 +56,14 @@ def _issue_to_ticket(issue: dict, db_ticket=None, job=None) -> Ticket:
     
     Status logic:
     1. If we have a db_ticket with a tracked status, use that
-    2. If issue has "devin:triaged" label, treat as "scoped" (auto-triage)
-    3. Otherwise, issue is "new" (closed issues without db tracking are ignored)
+    2. Otherwise, issue is "new" (must be scoped through dashboard first)
     
-    Note: We only show issues as "complete" if they were processed through our
-    dashboard, not just because they're closed on GitHub.
+    Note: We only show issues as "scoped" if they were processed through our
+    dashboard's scope endpoint, not based on GitHub labels. This ensures
+    the Action button only works for tickets that have been properly analyzed.
     """
-    labels = [label.get("name", "").lower() for label in issue.get("labels", [])]
-    
     if db_ticket and db_ticket.status in ("scoped", "in_progress", "review", "complete"):
         status = db_ticket.status
-    elif "devin:triaged" in labels:
-        # Auto-move issues with devin:triaged label to scoped
-        status = "scoped"
     else:
         status = "new"
     
