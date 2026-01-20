@@ -379,11 +379,14 @@ async def cancel_ticket_job(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
-    Cancel a running job for a ticket.
+    Cancel a running or failed job for a ticket.
     
     Args:
         ticket_number: The issue number
         repo: Optional repo override (format: owner/repo)
+    
+    Resets the ticket status back to 'scoped' so the user can try again.
+    Works for both running jobs (cancels them) and failed jobs (resets status).
     """
     target_repo = repo or settings.github_repo
     ticket = ticket_repository.get_by_repo_and_number(
@@ -396,17 +399,18 @@ async def cancel_ticket_job(
     
     job = job_repository.get_latest_for_ticket(ticket.id)
     
-    if not job or job.status != "running":
-        raise HTTPException(status_code=400, detail="No running job to cancel")
+    if not job or job.status not in ("running", "failed"):
+        raise HTTPException(status_code=400, detail="No running or failed job to cancel")
     
-    devin_service = get_devin_service(settings)
-    devin_service.mark_cancelled(job.id)
-    
-    job_repository.update_status(
-        job_id=job.id,
-        status="failed",
-        error_message="Cancelled by user",
-    )
+    if job.status == "running":
+        devin_service = get_devin_service(settings)
+        devin_service.mark_cancelled(job.id)
+        
+        job_repository.update_status(
+            job_id=job.id,
+            status="failed",
+            error_message="Cancelled by user",
+        )
     
     ticket_repository.update_status(
         repo=target_repo,
