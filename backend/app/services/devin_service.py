@@ -82,6 +82,9 @@ class DevinService:
         Raises:
             Exception: If API call fails
         """
+        if not self.api_key:
+            raise Exception("Devin API key not configured. Please set DEVIN_API_KEY in your .env file.")
+        
         async with httpx.AsyncClient(timeout=60.0) as client:
             payload = {
                 "prompt": prompt,
@@ -169,6 +172,16 @@ class DevinService:
             completion_callback: Function to call when complete
             worktree_callback: Optional callback for session info
         """
+        if not self.api_key:
+            await progress_callback(
+                job_id=job_id,
+                status="failed",
+                current_step="Error",
+                steps_completed=0,
+                error_message="Devin API key not configured. Please set DEVIN_API_KEY in .env file."
+            )
+            return
+        
         ticket_title = ticket_data.get("title", f"Issue #{ticket_number}")
         ticket_body = ticket_data.get("body", "")
         repo = ticket_data.get("repo", self.settings.github_repo)

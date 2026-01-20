@@ -20,4 +20,4 @@ A GitHub Issues dashboard that integrates with Devin for automated ticket resolu
 
 - `GITHUB_TOKEN`: GitHub personal access token with repo access
 - `GITHUB_REPO`: Default repository (format: owner/repo)
-- `DEVIN_API_KEY`: Your Devin API key 
+- `DEVIN_API_KEY`: **Required** - Your Devin API key from https://devin.ai. Without this, the Action button will not work. 
