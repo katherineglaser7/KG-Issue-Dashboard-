@@ -56,19 +56,14 @@ def _issue_to_ticket(issue: dict, db_ticket=None, job=None) -> Ticket:
     
     Status logic:
     1. If we have a db_ticket with a tracked status, use that
-    2. If issue has "devin:triaged" label, treat as "scoped" (auto-triage)
-    3. Otherwise, issue is "new" (closed issues without db tracking are ignored)
+    2. Otherwise, issue is "new" (must be scoped through dashboard first)
     
-    Note: We only show issues as "complete" if they were processed through our
-    dashboard, not just because they're closed on GitHub.
+    Note: We only show issues as "scoped" if they were processed through our
+    dashboard's scope endpoint, not based on GitHub labels. This ensures
+    the Action button only works for tickets that have been properly analyzed.
     """
-    labels = [label.get("name", "").lower() for label in issue.get("labels", [])]
-    
     if db_ticket and db_ticket.status in ("scoped", "in_progress", "review", "complete"):
         status = db_ticket.status
-    elif "devin:triaged" in labels:
-        # Auto-move issues with devin:triaged label to scoped
-        status = "scoped"
     else:
         status = "new"
     
@@ -384,11 +379,14 @@ async def cancel_ticket_job(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
-    Cancel a running job for a ticket.
+    Cancel a running or failed job for a ticket.
     
     Args:
         ticket_number: The issue number
         repo: Optional repo override (format: owner/repo)
+    
+    Resets the ticket status back to 'scoped' so the user can try again.
+    Works for both running jobs (cancels them) and failed jobs (resets status).
     """
     target_repo = repo or settings.github_repo
     ticket = ticket_repository.get_by_repo_and_number(
@@ -401,17 +399,18 @@ async def cancel_ticket_job(
     
     job = job_repository.get_latest_for_ticket(ticket.id)
     
-    if not job or job.status != "running":
-        raise HTTPException(status_code=400, detail="No running job to cancel")
+    if not job or job.status not in ("running", "failed"):
+        raise HTTPException(status_code=400, detail="No running or failed job to cancel")
     
-    devin_service = get_devin_service(settings)
-    devin_service.mark_cancelled(job.id)
-    
-    job_repository.update_status(
-        job_id=job.id,
-        status="failed",
-        error_message="Cancelled by user",
-    )
+    if job.status == "running":
+        devin_service = get_devin_service(settings)
+        devin_service.mark_cancelled(job.id)
+        
+        job_repository.update_status(
+            job_id=job.id,
+            status="failed",
+            error_message="Cancelled by user",
+        )
     
     ticket_repository.update_status(
         repo=target_repo,
