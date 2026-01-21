@@ -185,7 +185,6 @@ function TicketCard({
   jobData,
   onExecute,
   onCancel,
-  onComplete,
   onUnscope,
 }: { 
   ticket: Ticket
@@ -195,7 +194,6 @@ function TicketCard({
   jobData: JobData
   onExecute: (ticketNumber: number) => void
   onCancel: (ticketNumber: number) => void
-  onComplete: (ticketNumber: number) => void
   onUnscope: (ticketNumber: number) => void
 }){
   const scope = scopeData[ticket.number]
@@ -440,12 +438,9 @@ function TicketCard({
               Open PR #{ticket.pr_number}
             </a>
           )}
-          <button
-            onClick={() => onComplete(ticket.number)}
-            className="w-full py-1.5 text-xs text-zinc-400 hover:text-green-400 hover:bg-green-900/20 rounded transition-colors"
-          >
-            Mark Complete
-          </button>
+          <p className="text-xs text-zinc-500 text-center">
+            Merge the PR to complete
+          </p>
         </div>
       )}
 
@@ -481,7 +476,6 @@ function Column({
   jobData,
   onExecute,
   onCancel,
-  onComplete,
   onUnscope,
 }: { 
   title: string
@@ -493,7 +487,6 @@ function Column({
   jobData: JobData
   onExecute: (ticketNumber: number) => void
   onCancel: (ticketNumber: number) => void
-  onComplete: (ticketNumber: number) => void
   onUnscope: (ticketNumber: number) => void
 }){
   return (
@@ -515,7 +508,6 @@ function Column({
             jobData={jobData}
             onExecute={onExecute}
             onCancel={onCancel}
-            onComplete={onComplete}
             onUnscope={onUnscope}
           />
         ))}
@@ -711,27 +703,7 @@ function App() {
     }
   }
 
-  const handleComplete = async (ticketNumber: number) => {
-    try {
-      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/complete?repo=${encodeURIComponent(currentRepo)}`, {
-        method: 'POST',
-      })
-      
-      if (!response.ok) {
-        throw new Error('Failed to mark ticket complete')
-      }
-      
-      setTickets(prev => prev.map(t => 
-        t.number === ticketNumber 
-          ? { ...t, status: 'complete' }
-          : t
-      ))
-    } catch (err) {
-      console.error('Complete failed:', err)
-    }
-  }
-
-  const handleUnscope = async (ticketNumber: number) => {
+  const handleUnscope= async (ticketNumber: number) => {
     try {
       const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/unscope?repo=${encodeURIComponent(currentRepo)}`, {
         method: 'POST',
@@ -907,7 +879,6 @@ function App() {
             jobData={jobData}
             onExecute={handleExecute}
             onCancel={handleCancel}
-            onComplete={handleComplete}
             onUnscope={handleUnscope}
           />
           <Column 
@@ -920,7 +891,6 @@ function App() {
             jobData={jobData}
             onExecute={handleExecute}
             onCancel={handleCancel}
-            onComplete={handleComplete}
             onUnscope={handleUnscope}
           />
           <Column 
@@ -933,7 +903,6 @@ function App() {
             jobData={jobData}
             onExecute={handleExecute}
             onCancel={handleCancel}
-            onComplete={handleComplete}
             onUnscope={handleUnscope}
           />
           <Column 
@@ -946,7 +915,6 @@ function App() {
             jobData={jobData}
             onExecute={handleExecute}
             onCancel={handleCancel}
-            onComplete={handleComplete}
             onUnscope={handleUnscope}
           />
         </div>

@@ -125,10 +125,40 @@ async def get_tickets(
     Returns both open and closed issues as tickets, excluding pull requests.
     Database status (scoped, in_progress, review) takes precedence over GitHub labels.
     For in_progress tickets, includes the latest job data.
+    
+    Auto-completion: Tickets in "review" status with a merged PR are automatically
+    moved to "complete" status.
     """
     target_repo = repo or settings.github_repo
     github_service = get_github_service(settings, repo=target_repo)
     issues = await github_service.get_issues(state="all")
+    
+    db_tickets = ticket_repository.get_all(repo=target_repo)
+    db_tickets_by_number = {t.issue_number: t for t in db_tickets}
+    
+    tickets_in_review_with_pr = [
+        t for t in db_tickets 
+        if t.status == "review" and t.pr_number
+    ]
+    for db_ticket in tickets_in_review_with_pr:
+        try:
+            pr_data = await github_service.get_pull_request(db_ticket.pr_number)
+            if pr_data.get("merged"):
+                ticket_repository.update_status(
+                    repo=target_repo,
+                    issue_number=db_ticket.issue_number,
+                    status="complete",
+                )
+                try:
+                    await github_service.remove_label(db_ticket.issue_number, "review")
+                except Exception:
+                    pass
+                try:
+                    await github_service.add_label(db_ticket.issue_number, "implemented")
+                except Exception:
+                    pass
+        except Exception:
+            pass
     
     db_tickets = ticket_repository.get_all(repo=target_repo)
     db_tickets_by_number = {t.issue_number: t for t in db_tickets}
