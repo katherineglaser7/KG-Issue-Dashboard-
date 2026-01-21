@@ -440,12 +440,9 @@ function TicketCard({
               Open PR #{ticket.pr_number}
             </a>
           )}
-          <button
-            onClick={() => onComplete(ticket.number)}
-            className="w-full py-1.5 text-xs text-zinc-400 hover:text-green-400 hover:bg-green-900/20 rounded transition-colors"
-          >
-            Mark Complete
-          </button>
+          <p className="text-xs text-zinc-500 text-center">
+            Merge the PR to complete
+          </p>
         </div>
       )}
 
