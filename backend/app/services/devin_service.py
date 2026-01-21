@@ -267,6 +267,19 @@ Please create a PR when you're done."""
                     continue
                 
                 status_enum = session_details.get("status_enum", "")
+                pull_request = session_details.get("pull_request")
+                
+                if pull_request and pull_request.get("url"):
+                    pr_url = pull_request.get("url")
+                    parts = pr_url.rstrip("/").split("/")
+                    try:
+                        pr_number = int(parts[-1])
+                    except (ValueError, IndexError):
+                        pr_number = None
+                    break
+                
+                if status_enum == "finished":
+                    break
                 
                 if status_enum == "working":
                     step_num = min(1 + (elapsed // 60), 3)
@@ -289,18 +302,6 @@ Please create a PR when you're done."""
                         current_step=f"Devin needs assistance - check {session_url}",
                         steps_completed=2
                     )
-                
-                elif status_enum == "finished":
-                    pull_request = session_details.get("pull_request")
-                    if pull_request:
-                        pr_url = pull_request.get("url")
-                        if pr_url:
-                            parts = pr_url.rstrip("/").split("/")
-                            try:
-                                pr_number = int(parts[-1])
-                            except (ValueError, IndexError):
-                                pr_number = None
-                    break
                 
                 elif status_enum in ("expired", "suspend_requested"):
                     raise Exception(f"Devin session ended unexpectedly: {status_enum}")
