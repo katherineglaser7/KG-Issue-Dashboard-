@@ -201,7 +201,7 @@ function TicketCard({
   const scope = scopeData[ticket.number]
   const isLoading = scope?.loading || false
   const analysis = scope?.analysis || ticket.analysis || null
-  const job = jobData[ticket.number]?.job
+  const job = jobData[ticket.number]?.job || ticket.job
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-400'

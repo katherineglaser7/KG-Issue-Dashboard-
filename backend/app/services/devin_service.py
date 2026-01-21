@@ -14,6 +14,7 @@ import asyncio
 import httpx
 from typing import Optional, Callable, Any
 from app.config import Settings
+from app.database.repositories import ticket_repository
 
 cancelled_jobs: set[str] = set()
 
@@ -180,6 +181,11 @@ class DevinService:
                 steps_completed=0,
                 error_message="Devin API key not configured. Please set DEVIN_API_KEY in .env file."
             )
+            ticket_repository.update_status(
+                repo=ticket_data.get("repo"),
+                issue_number=ticket_number,
+                status="scoped"
+            )
             return
         
         ticket_title = ticket_data.get("title", f"Issue #{ticket_number}")
@@ -319,6 +325,11 @@ Please create a PR when you're done."""
                 current_step="Error",
                 steps_completed=0,
                 error_message=str(e)
+            )
+            ticket_repository.update_status(
+                repo=ticket_data.get("repo"),
+                issue_number=ticket_number,
+                status="scoped"
             )
 
 
