@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/collapsible'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const DEFAULT_REPO = 'katherineglaser7/devin-automation-test'
+const DEFAULT_REPO = import.meta.env.VITE_DEFAULT_REPO || ''
 
 interface JobStatus {
   id: string
@@ -520,7 +520,11 @@ function App() {
   const pollingIntervals = useRef<{ [key: number]: NodeJS.Timeout }>({})
 
   useEffect(() => {
-    fetchTickets()
+    if (currentRepo) {
+      fetchTickets()
+    } else {
+      setLoading(false)
+    }
     return () => {
       Object.values(pollingIntervals.current).forEach(clearInterval)
     }
@@ -547,7 +551,26 @@ function App() {
       clearInterval(pollingIntervals.current[ticketNumber])
     }
 
+    const MAX_POLLS = 120
+    let pollCount = 0
+
     const poll = async () => {
+      pollCount++
+      
+      if (pollCount > MAX_POLLS) {
+        clearInterval(pollingIntervals.current[ticketNumber])
+        delete pollingIntervals.current[ticketNumber]
+        setJobData(prev => ({
+          ...prev,
+          [ticketNumber]: { 
+            job: prev[ticketNumber]?.job || null, 
+            isPolling: false, 
+            error: 'Polling timeout - job took too long. Please check the job status manually or try again.' 
+          }
+        }))
+        return
+      }
+
       try {
         const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/job?repo=${encodeURIComponent(currentRepo)}`)
         if (!response.ok) {
@@ -604,7 +627,9 @@ function App() {
       })
       
       if (!response.ok) {
-        throw new Error('Failed to start execution')
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.detail || `Failed to start execution (${response.status})`
+        throw new Error(errorMessage)
       }
       
       await response.json()
