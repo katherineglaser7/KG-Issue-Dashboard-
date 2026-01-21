@@ -186,6 +186,7 @@ function TicketCard({
   onExecute,
   onCancel,
   onComplete,
+  onUnscope,
 }: { 
   ticket: Ticket
   scopeData: ScopeData
@@ -195,11 +196,12 @@ function TicketCard({
   onExecute: (ticketNumber: number) => void
   onCancel: (ticketNumber: number) => void
   onComplete: (ticketNumber: number) => void
+  onUnscope: (ticketNumber: number) => void
 }){
   const scope = scopeData[ticket.number]
   const isLoading = scope?.loading || false
   const analysis = scope?.analysis || ticket.analysis || null
-  const job = jobData[ticket.number]?.job
+  const job = jobData[ticket.number]?.job || ticket.job
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-400'
@@ -245,8 +247,19 @@ function TicketCard({
   return (
     <Card className={`${getCardStyles()} p-4 mb-3 hover:border-zinc-500 transition-colors`}>
       {getBadge() && (
-        <div className="flex items-center gap-2 mb-2">
-          {getBadge()}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            {getBadge()}
+          </div>
+          {columnType === 'scoped' && ticket.status === 'scoped' && !job?.status && (
+            <button
+              onClick={() => onUnscope(ticket.number)}
+              className="text-zinc-500 hover:text-red-400 transition-colors p-0.5"
+              title="Remove from Scoped"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       )}
       <a 
@@ -469,6 +482,7 @@ function Column({
   onExecute,
   onCancel,
   onComplete,
+  onUnscope,
 }: { 
   title: string
   count: number
@@ -480,6 +494,7 @@ function Column({
   onExecute: (ticketNumber: number) => void
   onCancel: (ticketNumber: number) => void
   onComplete: (ticketNumber: number) => void
+  onUnscope: (ticketNumber: number) => void
 }){
   return (
     <div className="flex-1 min-w-80 bg-zinc-900/50 rounded-lg p-4">
@@ -501,6 +516,7 @@ function Column({
             onExecute={onExecute}
             onCancel={onCancel}
             onComplete={onComplete}
+            onUnscope={onUnscope}
           />
         ))}
       </div>
@@ -665,7 +681,8 @@ function App() {
       })
       
       if (!response.ok) {
-        throw new Error('Failed to cancel job')
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to cancel job' }))
+        throw new Error(errorData.detail || 'Failed to cancel job')
       }
       
       setJobData(prev => ({
@@ -679,11 +696,18 @@ function App() {
       
       setTickets(prev => prev.map(t => 
         t.number === ticketNumber 
-          ? { ...t, status: 'scoped' }
+          ? { ...t, status: 'scoped', job: null }
           : t
       ))
     } catch (err) {
       console.error('Cancel failed:', err)
+      setJobData(prev => ({
+        ...prev,
+        [ticketNumber]: { 
+          ...prev[ticketNumber],
+          error: err instanceof Error ? err.message : 'Cancel failed'
+        }
+      }))
     }
   }
 
@@ -704,6 +728,32 @@ function App() {
       ))
     } catch (err) {
       console.error('Complete failed:', err)
+    }
+  }
+
+  const handleUnscope = async (ticketNumber: number) => {
+    try {
+      const response = await fetch(`${API_URL}/api/tickets/${ticketNumber}/unscope?repo=${encodeURIComponent(currentRepo)}`, {
+        method: 'POST',
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to unscope ticket')
+      }
+      
+      setTickets(prev => prev.map(t => 
+        t.number === ticketNumber 
+          ? { ...t, status: 'new', analysis: null }
+          : t
+      ))
+      
+      setScopeData(prev => {
+        const newData = { ...prev }
+        delete newData[ticketNumber]
+        return newData
+      })
+    } catch (err) {
+      console.error('Unscope failed:', err)
     }
   }
 
@@ -858,6 +908,7 @@ function App() {
             onExecute={handleExecute}
             onCancel={handleCancel}
             onComplete={handleComplete}
+            onUnscope={handleUnscope}
           />
           <Column 
             title="Scoped" 
@@ -870,6 +921,7 @@ function App() {
             onExecute={handleExecute}
             onCancel={handleCancel}
             onComplete={handleComplete}
+            onUnscope={handleUnscope}
           />
           <Column 
             title="Review" 
@@ -882,6 +934,7 @@ function App() {
             onExecute={handleExecute}
             onCancel={handleCancel}
             onComplete={handleComplete}
+            onUnscope={handleUnscope}
           />
           <Column 
             title="Complete" 
@@ -894,6 +947,7 @@ function App() {
             onExecute={handleExecute}
             onCancel={handleCancel}
             onComplete={handleComplete}
+            onUnscope={handleUnscope}
           />
         </div>
       </div>

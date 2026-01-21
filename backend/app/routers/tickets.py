@@ -434,6 +434,7 @@ async def cancel_ticket_job(
     
     Resets the ticket status back to 'scoped' so the user can try again.
     Works for both running jobs (cancels them) and failed jobs (resets status).
+    Also handles edge case where ticket is in_progress but job doesn't exist yet.
     """
     target_repo = repo or settings.github_repo
     ticket = ticket_repository.get_by_repo_and_number(
@@ -446,10 +447,7 @@ async def cancel_ticket_job(
     
     job = job_repository.get_latest_for_ticket(ticket.id)
     
-    if not job or job.status not in ("running", "failed"):
-        raise HTTPException(status_code=400, detail="No running or failed job to cancel")
-    
-    if job.status == "running":
+    if job and job.status == "running":
         devin_service = get_devin_service(settings)
         devin_service.mark_cancelled(job.id)
         
@@ -458,6 +456,12 @@ async def cancel_ticket_job(
             status="failed",
             error_message="Cancelled by user",
         )
+    elif job and job.status == "failed":
+        pass
+    elif ticket.status == "in_progress":
+        pass
+    else:
+        raise HTTPException(status_code=400, detail="No running or failed job to cancel")
     
     ticket_repository.update_status(
         repo=target_repo,
@@ -538,6 +542,52 @@ async def get_ticket_pr(
             "files_changed": files_changed
         }
     }
+
+
+@router.post("/{ticket_number}/unscope")
+async def unscope_ticket(
+    ticket_number: int,
+    repo: str | None = None,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    Remove a ticket from scoped status back to new.
+    
+    Args:
+        ticket_number: The issue number
+        repo: Optional repo override (format: owner/repo)
+    
+    Resets the ticket status from 'scoped' back to 'new' and clears the analysis data.
+    This allows users to remove tickets from the Scoped column if they change their mind.
+    """
+    target_repo = repo or settings.github_repo
+    ticket = ticket_repository.get_by_repo_and_number(
+        repo=target_repo,
+        issue_number=ticket_number,
+    )
+    
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    
+    if ticket.status != "scoped":
+        raise HTTPException(
+            status_code=400,
+            detail="Ticket must be in 'scoped' status to unscope"
+        )
+    
+    ticket_repository.update_status(
+        repo=target_repo,
+        issue_number=ticket_number,
+        status="new",
+    )
+    
+    ticket_repository.update_scope_data(
+        repo=target_repo,
+        issue_number=ticket_number,
+        scope_data=None,
+    )
+    
+    return {"status": "unscoped", "message": "Ticket moved back to New"}
 
 
 @router.post("/{ticket_number}/complete")
