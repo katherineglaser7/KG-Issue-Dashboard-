@@ -283,6 +283,12 @@ async def execute_ticket(
     Creates a job, updates ticket status to in_progress, and starts
     background execution task with real GitHub data.
     """
+    if not settings.devin_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="DEVIN_API_KEY is not configured. Please set the DEVIN_API_KEY environment variable to enable automated execution."
+        )
+    
     target_repo = repo or settings.github_repo
     ticket = ticket_repository.get_by_repo_and_number(
         repo=target_repo,

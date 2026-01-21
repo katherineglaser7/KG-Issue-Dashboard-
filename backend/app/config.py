@@ -13,15 +13,22 @@ To swap configuration sources (e.g., from env vars to a config service):
 Modify the model_config to use a different SettingsSource.
 """
 
+import logging
 from functools import lru_cache
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+# Calculate absolute path to .env file relative to config.py location
+_ENV_FILE_PATH = Path(__file__).parent.parent / ".env"
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE_PATH),
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
@@ -39,6 +46,8 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "database_url", "/data/app.db")
             else:
                 object.__setattr__(self, "database_url", "./data/dashboard.db")
+        if not self.devin_api_key:
+            logger.warning("DEVIN_API_KEY is not set - Action button will not work")
 
 
 @lru_cache
