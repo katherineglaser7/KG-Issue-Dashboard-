@@ -198,14 +198,16 @@ Issue #{ticket_number}: {ticket_title}
 
 {ticket_body}
 
+IMPORTANT: Work autonomously without waiting for user confirmation. Do NOT block or ask for approval at any step.
+
 Instructions:
 1. Clone the repository {repo}
 2. Analyze the issue and understand what needs to be fixed
 3. Implement the fix with proper code changes
-4. Create a pull request with your changes
+4. Create a draft pull request immediately with your changes - do NOT wait for user confirmation
 5. Make sure the PR description references issue #{ticket_number}
 
-Please create a PR when you're done."""
+CRITICAL: Create the PR automatically without asking for permission. Proceed autonomously through all steps. Do not block on user input."""
 
         session_id = None
         session_url = None
