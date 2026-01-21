@@ -526,17 +526,6 @@ function App() {
     }
   }, [])
 
-  // Start polling for tickets that are already in_progress when page loads
-  useEffect(() => {
-    const inProgressTickets = tickets.filter(t => t.status === 'in_progress')
-    inProgressTickets.forEach(ticket => {
-      // Only start polling if not already polling for this ticket
-      if (!pollingIntervals.current[ticket.number]) {
-        startPolling(ticket.number)
-      }
-    })
-  }, [tickets, startPolling])
-
   const fetchTickets = async (repo?: string) => {
     const targetRepo = repo || currentRepo
     try {
@@ -602,6 +591,17 @@ function App() {
     poll()
     pollingIntervals.current[ticketNumber] = setInterval(poll, 2000)
   }, [currentRepo])
+
+  // Start polling for tickets that are already in_progress when page loads
+  useEffect(() => {
+    const inProgressTickets = tickets.filter(t => t.status === 'in_progress')
+    inProgressTickets.forEach(ticket => {
+      // Only start polling if not already polling for this ticket
+      if (!pollingIntervals.current[ticket.number]) {
+        startPolling(ticket.number)
+      }
+    })
+  }, [tickets, startPolling])
 
   const handleExecute = async (ticketNumber: number) => {
     try {
