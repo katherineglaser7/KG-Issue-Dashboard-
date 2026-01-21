@@ -312,12 +312,20 @@ function TicketCard({
           )}
 
           {(ticket.status === 'in_progress' || job?.status === 'running') && job && (
-            <div className="mt-3 p-2 bg-yellow-900/20 rounded border border-yellow-500/30">
+            <div className={`mt-3 p-2 rounded border ${
+              job.current_step?.includes('needs assistance') 
+                ? 'bg-orange-900/20 border-orange-500/30' 
+                : 'bg-yellow-900/20 border-yellow-500/30'
+            }`}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Loader2 className="w-3.5 h-3.5 text-yellow-400 animate-spin" />
-                  <span className="text-xs text-yellow-400">
-                    Step {job.steps_completed + 1}/{job.total_steps}
+                  <Loader2 className={`w-3.5 h-3.5 animate-spin ${
+                    job.current_step?.includes('needs assistance') ? 'text-orange-400' : 'text-yellow-400'
+                  }`} />
+                  <span className={`text-xs ${
+                    job.current_step?.includes('needs assistance') ? 'text-orange-400' : 'text-yellow-400'
+                  }`}>
+                    {job.current_step?.includes('needs assistance') ? 'Needs Assistance' : `Step ${job.steps_completed + 1}/${job.total_steps}`}
                   </span>
                 </div>
                 <button
@@ -328,7 +336,24 @@ function TicketCard({
                   Cancel
                 </button>
               </div>
-              <p className="text-xs text-zinc-300">{job.current_step || 'Starting...'}</p>
+              {job.current_step?.includes('needs assistance') ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-orange-300">Devin is blocked and needs your help to continue.</p>
+                  {job.worktree_path && (
+                    <a
+                      href={job.worktree_path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 w-full py-2 text-xs text-orange-400 bg-orange-900/30 rounded hover:bg-orange-900/50 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Open Devin Session
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-300">{job.current_step || 'Starting...'}</p>
+              )}
               {(job.branch_name || ticket.branch_name) && (
                 <p className="text-xs text-zinc-500 mt-1">Branch: {job.branch_name || ticket.branch_name}</p>
               )}
