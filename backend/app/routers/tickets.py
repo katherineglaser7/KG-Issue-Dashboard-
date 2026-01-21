@@ -540,6 +540,52 @@ async def get_ticket_pr(
     }
 
 
+@router.post("/{ticket_number}/unscope")
+async def unscope_ticket(
+    ticket_number: int,
+    repo: str | None = None,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    Remove a ticket from scoped status back to new.
+    
+    Args:
+        ticket_number: The issue number
+        repo: Optional repo override (format: owner/repo)
+    
+    Resets the ticket status from 'scoped' back to 'new' and clears the analysis data.
+    This allows users to remove tickets from the Scoped column if they change their mind.
+    """
+    target_repo = repo or settings.github_repo
+    ticket = ticket_repository.get_by_repo_and_number(
+        repo=target_repo,
+        issue_number=ticket_number,
+    )
+    
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    
+    if ticket.status != "scoped":
+        raise HTTPException(
+            status_code=400,
+            detail="Ticket must be in 'scoped' status to unscope"
+        )
+    
+    ticket_repository.update_status(
+        repo=target_repo,
+        issue_number=ticket_number,
+        status="new",
+    )
+    
+    ticket_repository.update_scope_data(
+        repo=target_repo,
+        issue_number=ticket_number,
+        scope_data=None,
+    )
+    
+    return {"status": "unscoped", "message": "Ticket moved back to New"}
+
+
 @router.post("/{ticket_number}/complete")
 async def complete_ticket(
     ticket_number: int,
