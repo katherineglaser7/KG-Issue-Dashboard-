@@ -319,6 +319,33 @@ async def execute_ticket(
     
     devin_service = get_devin_service(settings)
     
+    async def progress_callback_with_failure_handling(
+        job_id: str,
+        status: str,
+        current_step: str,
+        steps_completed: int,
+        error_message: str | None = None,
+    ) -> None:
+        """Callback that updates job progress and resets ticket on failure."""
+        await _update_job_progress(
+            job_id=job_id,
+            status=status,
+            current_step=current_step,
+            steps_completed=steps_completed,
+            error_message=error_message,
+        )
+        if status == "failed":
+            ticket_repository.update_status(
+                repo=target_repo,
+                issue_number=ticket_number,
+                status="scoped",
+            )
+            github_service = get_github_service(settings, repo=target_repo)
+            try:
+                await github_service.remove_label(ticket_number, "in-progress")
+            except Exception:
+                pass
+    
     async def run_execution():
         await devin_service.execute_task(
             job_id=job.id,
@@ -328,7 +355,7 @@ async def execute_ticket(
                 "body": issue.get("body", ""),
                 "repo": target_repo,
             },
-            progress_callback=_update_job_progress,
+            progress_callback=progress_callback_with_failure_handling,
             completion_callback=lambda **kwargs: _complete_job(**kwargs, settings=settings, target_repo=target_repo),
             worktree_callback=_update_worktree_info,
         )
