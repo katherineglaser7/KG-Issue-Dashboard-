@@ -681,7 +681,8 @@ function App() {
       })
       
       if (!response.ok) {
-        throw new Error('Failed to cancel job')
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to cancel job' }))
+        throw new Error(errorData.detail || 'Failed to cancel job')
       }
       
       setJobData(prev => ({
@@ -695,11 +696,18 @@ function App() {
       
       setTickets(prev => prev.map(t => 
         t.number === ticketNumber 
-          ? { ...t, status: 'scoped' }
+          ? { ...t, status: 'scoped', job: null }
           : t
       ))
     } catch (err) {
       console.error('Cancel failed:', err)
+      setJobData(prev => ({
+        ...prev,
+        [ticketNumber]: { 
+          ...prev[ticketNumber],
+          error: err instanceof Error ? err.message : 'Cancel failed'
+        }
+      }))
     }
   }
 
