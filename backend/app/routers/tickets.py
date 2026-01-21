@@ -219,8 +219,22 @@ async def _complete_job(
     branch_name: str,
     settings: Settings,
     target_repo: str | None = None,
+    session_id: str | None = None,
+    session_url: str | None = None,
 ) -> None:
-    """Callback when job completes successfully."""
+    """Callback when job completes successfully.
+    
+    Args:
+        job_id: The job ID to update
+        ticket_number: The issue number
+        pr_number: The PR number created by Devin
+        pr_url: The URL to the PR
+        branch_name: The branch name for the PR
+        settings: Application settings
+        target_repo: Optional repo override
+        session_id: Devin session ID (passed by execute_task, stored for reference)
+        session_url: Devin session URL (passed by execute_task, stored for reference)
+    """
     repo = target_repo or settings.github_repo
     job_repository.update_status(
         job_id=job_id,
