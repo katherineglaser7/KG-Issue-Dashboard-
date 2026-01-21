@@ -349,7 +349,32 @@ function TicketCard({
             </div>
           )}
 
-          {ticket.status === 'scoped' && !job?.status && (
+          {/* Show loading state when ticket is in_progress but job data not yet loaded */}
+          {ticket.status === 'in_progress' && !job && (
+            <div className="mt-3 p-2 bg-yellow-900/20 rounded border border-yellow-500/30">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 text-yellow-400 animate-spin" />
+                <span className="text-xs text-yellow-400">Starting execution...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Show error state when polling failed */}
+          {jobData[ticket.number]?.error && !job && (
+            <div className="mt-3 p-2 bg-red-900/20 rounded border border-red-500/30">
+              <p className="text-xs text-red-400 mb-2">{jobData[ticket.number]?.error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs border-red-500 text-red-400 hover:bg-red-500/10"
+                onClick={() => onExecute(ticket.number)}
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {ticket.status === 'scoped' && !job?.status && !jobData[ticket.number]?.error && (
             <Button
               size="sm"
               className="mt-2 w-full text-xs bg-green-900/50 text-green-400 border border-green-700 hover:bg-green-800/50"
